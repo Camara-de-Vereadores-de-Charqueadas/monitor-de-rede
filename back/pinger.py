@@ -1,5 +1,6 @@
 import datetime
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class Pinger:
     error_patterns = {
@@ -53,3 +54,29 @@ class Pinger:
             return result.stdout.splitlines()
         except Exception as e:
             return [f"Erro ao pingar o endereço: {ip}: {e}"]
+        
+    def ping_device(ip, devices):
+        lines = Pinger.run_ping(ip)
+        return Pinger.analyzePingErrors(lines, devices, ip)
+    
+    def check_devices(devices: dict, max_workers: int = 10):
+        errors = []
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_ip = {executor.submit(Pinger.ping_device, ip, devices): ip for ip in devices.keys()}
+            for future in as_completed(future_to_ip):
+                error = future.result()
+                if error:
+                    errors.append(error)
+        
+        if errors:
+            return {
+                "code": 500,
+                "message": "Erros encontrados.",
+                "errors": errors
+            }
+        else: 
+            return {
+                "code": 200,
+                "message": "Rede OK!"
+            }
