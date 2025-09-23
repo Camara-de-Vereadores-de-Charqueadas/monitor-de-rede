@@ -74,12 +74,14 @@ class MonitorUI:
         ping_interval = 30
         ping_counter = 0
         countdown = ping_interval
+        history = []
 
         while True:
-            if countdown <= 0:
+            if countdown <= 0 or ping_counter == 0:
                 results = controller.update_status(self.devices, self.selected_devices)
                 ping_counter += 1
                 countdown = ping_interval
+
             else:
                 results = []
 
@@ -89,7 +91,10 @@ class MonitorUI:
             print(f"Próximo ping em: {countdown} segundos")
             print(f"Pings realizados: {ping_counter}\n")
 
-            for r in results:
+            if results:
+                history.extend(results)
+                
+            for r in history:
                 print(f"[{r['code']}] {r['message']}")
                 if r.get("errors"):
                     for e in r["errors"]:
