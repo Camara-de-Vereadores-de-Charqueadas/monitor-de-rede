@@ -71,37 +71,58 @@ class MonitorUI:
         print("Monitoramento iniciado. Pressione 'q' para encerrar.")
         time.sleep(1)
 
-        ping_interval = 30
+        selected_ips = [d.ip for d in self.devices if self.selected_devices[d.ip]]
+        total = len(selected_ips)
         ping_counter = 0
-        countdown = ping_interval
+        
+        CYCLE_INTERVAL = 30
+        history = []
 
         while True:
-            if countdown <= 0:
-                results = controller.update_status(self.devices, self.selected_devices)
-                ping_counter += 1
-                countdown = ping_interval
-            else:
-                results = []
-
-            os.system("clear" if os.name == "posix" else "cls")
-
-            print("=== MONITORANDO REDE ===")
-            print(f"Próximo ping em: {countdown} segundos")
-            print(f"Pings realizados: {ping_counter}\n")
-
-            for r in results:
-                print(f"[{r['code']}] {r['message']}")
-                if r.get("errors"):
-                    for e in r["errors"]:
-                        print(f" - {e['name']} ({e['ip']})")
+            current_errors = [] 
             
-            print("\nPressione 'q' para sair do monitoramento.")
+            for idx, ip in enumerate(selected_ips, 1):
+                if self.key_pressed("q"):
+                    return
+                
+                res = controller.ping_device(ip, {d.ip: d.name for d in self.devices})
+                
+                if res.get("code") == 500:
+                    current_errors.append(res)
 
-            if self.key_pressed("q"):
-                return
+                os.system("clear" if os.name == "posix" else "cls")
+                print("=== MONITORANDO REDE ===")
+                print(f"Progresso: {idx}/{total} dispositivos")
+                print(f"Ciclos completados: {ping_counter}\n")
+                print("Testando dispositivos...")
+                time.sleep(0.1)
+            
+            if current_errors:
+                history.extend(current_errors)
+            else:
+                history.append({"code": 200, "message": "Rede OK!"})
+            
+            os.system("clear" if os.name == "posix" else "cls")
+            print("=== MONITORANDO REDE ===")
+            print(f"Progresso: {total}/{total} dispositivos")
+            print(f"Ciclos completados: {ping_counter + 1}\n")
 
-            time.sleep(1)
-            countdown -= 1
+            for entry in history:
+                if entry.get("code") == 500:
+                    print(f" - {entry.get('name', 'Unknown')} ({entry.get('ip', 'Unknown')}) | {entry.get('error', 'Unknown error')}")
+                elif entry.get("code") == 200:
+                    print(f"[{entry.get('code')}] {entry.get('message', '')}")
+            
+            ping_counter += 1
+            print("Pressione 'q' para sair.\n")
+                        
+            for remaining in range(CYCLE_INTERVAL, 0, -1):
+                if self.key_pressed("q"):
+                    return
+                print(f"\rPróximo ciclo em {remaining} segundos...", end="", flush=True)
+                time.sleep(1)
+            print()
+
         
     def list_devices(self, controller):
         controller.list_devices(self.devices, self.selected_devices)
