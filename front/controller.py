@@ -1,3 +1,5 @@
+from back.pinger import Pinger
+
 class Controller:
     def list_devices(self, devices, selected_devices):
         print("\nDevices: ")
@@ -11,29 +13,9 @@ class Controller:
             if enabled:
                 print(f"- {ip}")
 
-    def update_statuses(self, devices, selected_devices):
-        results = []
-        errors = []
-
-        for d in devices:
-            if selected_devices[d.ip]:
-                if d.status == "Offline":
-                    errors.append({"name": d.name, "ip": d.ip})
-                else:
-                    d.status = "Online"
-
-        if errors:
-            results.append({
-                "status": "500",
-                "message": "Encontrado erros.",
-                "errors": errors
-            })
-        else:
-            results.append({
-                "status": "200",
-                "message": "Rede OK!"
-            })
-
+    def update_status(self, devices, selected_devices):
+        active = {d.ip: d.name for d in devices if selected_devices[d.ip]}
+        results = [Pinger.check_devices(active)]
         return results
 
 

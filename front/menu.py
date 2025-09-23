@@ -46,9 +46,9 @@ class MonitorUI:
             elif choice == "Config dispositivos":
                 self.config_devices()
             
-            elif choice == "Saindo":
+            elif choice == "Sair":
                 print("Encerrando.")
-                break
+                sys.exit(0)
 
     def config_devices(self):
         choices = [
@@ -77,7 +77,7 @@ class MonitorUI:
 
         while True:
             if countdown <= 0:
-                results = controller.update_statuses(self.devices, self.selected_devices)
+                results = controller.update_status(self.devices, self.selected_devices)
                 ping_counter += 1
                 countdown = ping_interval
             else:
@@ -90,10 +90,10 @@ class MonitorUI:
             print(f"Pings realizados: {ping_counter}\n")
 
             for r in results:
-                print(f"[{r['status']}] {r['message']}")
+                print(f"[{r['code']}] {r['message']}")
                 if r.get("errors"):
                     for e in r["errors"]:
-                        print(f" - {e['nme']} ({e['ip']})")
+                        print(f" - {e['name']} ({e['ip']})")
             
             print("\nPressione 'q' para sair do monitoramento.")
 
