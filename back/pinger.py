@@ -3,55 +3,56 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class Pinger:
-    error_patterns = {
-        "100% packet loss": "100% perda de pacotes",
-        "Destination Host Unreachable": "Host inacessível",
-        "Network is unreachable": "Network inacessível"
-    }
-
     def analyzePingErrors(lines, devices, ip):
-        for line in lines:
-            for pattern, error_msg in Pinger.error_patterns.items():
-                if pattern in line:
-                    device_name = devices.get(ip, "Nome desconhecido")
-                    return {
-                        "name": device_name,
-                        "ip": ip,
-                        "error": error_msg
-                    }
-                
+        full_output = ' '.join(lines).lower()
+        
+        error_patterns = {
+            "100% packet loss": "100% perda de pacotes",
+            "destination host unreachable": "Host inacessível", 
+            "network is unreachable": "Rede inacessível",
+            "request timeout": "Timeout",
+            "no route to host": "Sem rota para o host"
+        }
+        
+        for pattern, error_msg in error_patterns.items():
+            if pattern in full_output:
+                device_name = devices.get(ip, "Nome desconhecido") if isinstance(devices, dict) else "Nome desconhecido"
+                return {
+                    "name": device_name,
+                    "ip": ip,
+                    "error": error_msg
+                }
+        
+        if "0 received" in full_output and "100%" in full_output:
+            device_name = devices.get(ip, "Nome desconhecido") if isinstance(devices, dict) else "Nome desconhecido"
+            return {
+                "name": device_name,
+                "ip": ip,
+                "error": "100% perda de pacotes"
+            }
+        
+        if "bytes from" not in full_output and len(lines) > 2:
+            device_name = devices.get(ip, "Nome desconhecido") if isinstance(devices, dict) else "Nome desconhecido"
+            return {
+                "name": device_name,
+                "ip": ip,
+                "error": "Sem resposta do host"
+            }
+        
         return None
     
-    def check_devices(devices: dict):
-        errors = []
-
-        for ip in devices.keys():
-            lines = Pinger.run_ping(ip)
-            error = Pinger.analyzePingErrors(lines, devices, ip)
-            if error:
-                errors.append(error)
-
-        if errors:
-            return {
-                "code": 500,
-                "message": "Erros encontrados.",
-                "errors": errors
-            }
-        else:
-            return {
-                "code": 200,
-                "message": "Rede OK!"
-            }
-    
-    def run_ping(ip: str, count: int = 2):
+    def run_ping(ip: str, count: int = 1):
         try:
             result = subprocess.run(
-                ["ping", "-c", str(count), ip],
+                ["ping", "-c", str(count), "-W", "5", ip],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                text=True
+                text=True,
+                timeout=10
             )
             return result.stdout.splitlines()
+        except subprocess.TimeoutExpired:
+            return ["Ping timeout"]
         except Exception as e:
             return [f"Erro ao pingar o endereço: {ip}: {e}"]
         
@@ -63,20 +64,13 @@ class Pinger:
         errors = []
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_ip = {executor.submit(Pinger.ping_device, ip, devices): ip for ip in devices.keys()}
-            for future in as_completed(future_to_ip):
-                error = future.result()
-                if error:
-                    errors.append(error)
-        
+            futures = {executor.submit(Pinger.ping_device, ip, devices): ip for ip in devices.keys()}
+
+            for future in as_completed(futures):
+                err = future.result()
+                if err:
+                    errors.append(err)
+
         if errors:
-            return {
-                "code": 500,
-                "message": "Erros encontrados.",
-                "errors": errors
-            }
-        else: 
-            return {
-                "code": 200,
-                "message": "Rede OK!"
-            }
+            return {"code": 500, "message": "Erros encontrados", "errors": errors}
+        return {"code": 200, "message": "Rede OK!"}
